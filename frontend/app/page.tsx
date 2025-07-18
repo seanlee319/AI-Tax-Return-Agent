@@ -1,103 +1,233 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useState, ChangeEvent, FormEvent } from 'react';
+import Head from 'next/head';
+
+type PersonalInfo = {
+  filingStatus: string;
+  dependents: number;
+};
+
+type FileResult = {
+  filename: string;
+  text: string;
+  message: string;
+};
+
+export default function TaxReturnUpload() {
+  const [files, setFiles] = useState<File[]>([]);
+  const [uploadStatus, setUploadStatus] = useState('');
+  const [personalInfo, setPersonalInfo] = useState<PersonalInfo>({
+    filingStatus: '',
+    dependents: 0  // Numeric value in state
+  });
+  const [dependentsInput, setDependentsInput] = useState('0');  // Display value
+  const [results, setResults] = useState<FileResult[] | null>(null);
+
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setFiles(Array.from(e.target.files));
+    }
+  };
+
+  const handlePersonalInfoChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setPersonalInfo(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleDependentsChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setDependentsInput(value);
+    setPersonalInfo(prev => ({
+      ...prev,
+      dependents: value === '' ? 0 : parseInt(value) || 0
+    }));
+  };
+
+  const handleSubmitFiles = async (e: FormEvent) => {
+    e.preventDefault();
+    if (files.length === 0) {
+      setUploadStatus('Please select at least one file');
+      return;
+    }
+
+    const formData = new FormData();
+    files.forEach(file => {
+      formData.append('files', file);
+    });
+
+    try {
+      setUploadStatus('Uploading files...');
+      const response = await fetch('http://localhost:5000/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setResults(data.results);
+        setUploadStatus('Files uploaded and processed successfully!');
+      } else {
+        setUploadStatus(`Error: ${data.error}`);
+      }
+    } catch (error) {
+      setUploadStatus(`Error: ${(error as Error).message}`);
+    }
+  };
+
+  const handleSubmitPersonalInfo = async (e: FormEvent) => {
+    e.preventDefault();
+    try {
+      const response = await fetch('http://localhost:5000/submit-personal-info', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(personalInfo),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setUploadStatus('Personal information submitted successfully!');
+      } else {
+        setUploadStatus(`Error: ${data.error}`);
+      }
+    } catch (error) {
+      setUploadStatus(`Error: ${(error as Error).message}`);
+    }
+  };
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <Head>
+        <title>AI Tax Return Agent</title>
+      </Head>
+      
+      <div className="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden md:max-w-2xl p-6">
+        <h1 className="text-2xl font-bold text-gray-800 mb-6">AI Tax Return Agent</h1>
+        
+        {/* Personal Information Form */}
+        <form onSubmit={handleSubmitPersonalInfo} className="mb-8">
+          <h2 className="text-lg font-semibold mb-4">Personal Information</h2>
+          
+          <div className="mb-4">
+            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="filingStatus">
+              Filing Status
+            </label>
+            <select
+              id="filingStatus"
+              name="filingStatus"
+              value={personalInfo.filingStatus}
+              onChange={handlePersonalInfoChange}
+              className="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              required
+            >
+              <option value="">Select filing status</option>
+              <option value="single">Single</option>
+              <option value="married_joint">Married Filing Jointly</option>
+              <option value="married_separate">Married Filing Separately</option>
+              <option value="head_of_household">Head of Household</option>
+              <option value="widower">Qualifying Widow(er)</option>
+            </select>
+          </div>
+          
+          <div className="mb-4">
+            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="dependents">
+              Number of Dependents
+            </label>
+            <input
+              type="number"
+              id="dependents"
+              name="dependents"
+              min="0"
+              value={dependentsInput}
+              onChange={handleDependentsChange}
+              onFocus={(e) => {
+                if (e.target.value === '0') {
+                  setDependentsInput('');
+                }
+              }}
+              onBlur={(e) => {
+                if (e.target.value === '') {
+                  setDependentsInput('0');
+                }
+              }}
+              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              required
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+          </div>
+          
+          <button
+            type="submit"
+            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
           >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+            Save Personal Info
+          </button>
+        </form>
+        
+        {/* File Upload Form */}
+        <form onSubmit={handleSubmitFiles}>
+          <h2 className="text-lg font-semibold mb-4">Upload Tax Documents</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Supported documents: W-2, 1099-INT, 1099-NEC (PDF format)
+          </p>
+          
+          <div className="mb-4">
+            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="files">
+              Select Files
+            </label>
+            <input
+              type="file"
+              id="files"
+              name="files"
+              onChange={handleFileChange}
+              className="block w-full text-sm text-gray-500
+                file:mr-4 file:py-2 file:px-4
+                file:rounded-md file:border-0
+                file:text-sm file:font-semibold
+                file:bg-blue-50 file:text-blue-700
+                hover:file:bg-blue-100"
+              multiple
+              accept=".pdf"
+            />
+          </div>
+          
+          <button
+            type="submit"
+            className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+          >
+            Upload and Process Files
+          </button>
+        </form>
+        
+        {/* Status and Results */}
+        {uploadStatus && (
+          <div className={`mt-4 p-3 rounded ${uploadStatus.includes('Error') ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+            {uploadStatus}
+          </div>
+        )}
+        
+        {results && (
+          <div className="mt-6">
+            <h3 className="text-md font-semibold mb-2">Processed Files:</h3>
+            <ul className="space-y-2">
+              {results.map((result, index) => (
+                <li key={index} className="p-3 bg-gray-100 rounded">
+                  <p><strong>Filename:</strong> {result.filename}</p>
+                  <p><strong>Status:</strong> {result.message}</p>
+                  <details className="mt-2">
+                    <summary className="text-sm text-blue-600 cursor-pointer">View extracted text</summary>
+                    <pre className="text-xs bg-white p-2 mt-1 rounded overflow-auto max-h-40">{result.text}</pre>
+                  </details>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
