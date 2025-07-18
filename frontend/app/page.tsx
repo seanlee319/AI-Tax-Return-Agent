@@ -47,36 +47,43 @@ export default function TaxReturnUpload() {
     }));
   };
 
-  const handleSubmitFiles = async (e: FormEvent) => {
-    e.preventDefault();
-    if (files.length === 0) {
-      setUploadStatus('Please select at least one file');
-      return;
-    }
+const handleSubmitFiles = async (e: FormEvent) => {
+  e.preventDefault();
+  
+  if (files.length === 0) {
+    setUploadStatus('Please select at least one file');
+    return;
+  }
 
+  try {
+    setUploadStatus('Uploading files...');
+    
     const formData = new FormData();
-    files.forEach(file => {
-      formData.append('files', file);
+    files.forEach(file => formData.append('files', file));
+
+    const response = await fetch('http://localhost:5000/upload', {
+      method: 'POST',
+      body: formData,
+      // Don't set Content-Type header - the browser will set it automatically with the boundary
     });
 
-    try {
-      setUploadStatus('Uploading files...');
-      const response = await fetch('http://localhost:5000/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await response.json();
-      if (response.ok) {
-        setResults(data.results);
-        setUploadStatus('Files uploaded and processed successfully!');
-      } else {
-        setUploadStatus(`Error: ${data.error}`);
-      }
-    } catch (error) {
-      setUploadStatus(`Error: ${(error as Error).message}`);
+    if (!response.ok) {
+      throw new Error(`Server responded with status ${response.status}`);
     }
-  };
+
+    const data = await response.json();
+    setResults(data.files.map((file: any) => ({
+      filename: file.original_name,
+      message: `Saved as ${file.saved_name}`,
+      text: 'File stored successfully'
+    })));
+    setUploadStatus('Files uploaded successfully!');
+    
+  } catch (error) {
+    console.error('Upload error:', error);
+    setUploadStatus(`Error: ${error instanceof Error ? error.message : 'Failed to upload files'}`);
+  }
+};
 
   const handleSubmitPersonalInfo = async (e: FormEvent) => {
     e.preventDefault();
