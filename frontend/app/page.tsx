@@ -23,6 +23,7 @@ export default function TaxReturnUpload() {
   });
   const [dependentsInput, setDependentsInput] = useState('0');  // Display value
   const [results, setResults] = useState<FileResult[] | null>(null);
+  const isProcessingDisabled = !personalInfo.filingStatus || files.length === 0;
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -204,10 +205,25 @@ const handleSubmitFiles = async (e: FormEvent) => {
           
           <button
             type="submit"
-            className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+            disabled={isProcessingDisabled}
+            className={`${
+              isProcessingDisabled
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-green-500 hover:bg-green-700'
+            } text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline`}
           >
             Upload and Process Files
           </button>
+          {isProcessingDisabled && personalInfo.filingStatus === '' && (
+            <p className="text-xs text-red-500 mt-1">
+              Please select a filing status first
+            </p>
+          )}
+          {isProcessingDisabled && files.length === 0 && (
+            <p className="text-xs text-red-500 mt-1">
+              Please select at least one file to upload
+            </p>
+          )}
         </form>
         
         {/* Status and Results */}

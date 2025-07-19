@@ -1,5 +1,10 @@
 import os
 import pdfplumber
+import pytesseract
+from PIL import Image
+import io
+import fitz
+import re
 from flask import Flask, request, jsonify
 from werkzeug.utils import secure_filename
 from pathlib import Path
@@ -15,81 +20,196 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-ALLOWED_EXTENSIONS = {'pdf'}
-
 Path(UPLOAD_FOLDER).mkdir(parents=True, exist_ok=True)
 
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-def extract_w2_data(text):
-    """Parse W-2 form data from extracted text with validation"""
-    if not text:
-        print("Debug: No text provided to parse")
-        return {"error": "No text to parse"}
-    
-    lines = text.split('\n')
-    w2_data = {}
-    
-    try:
-        for i, line in enumerate(lines):
-            line = line.strip()
-            
-            if "b Employer identification number" in line and i+1 < len(lines):
-                next_line = lines[i+1].strip()
-                parts = next_line.split()
-                
-                print(f"\n=== DEBUG W-2 PARSING ===")
-                print(f"Target line: {i+1}: '{next_line}'")
-                print(f"Split into: {parts}")
-                
-                # Filter out EIN (numbers with hyphens) and count valid numbers
-                numbers = [p for p in parts if p.replace('.', '').isdigit()]
-                
-                print(f"Found numbers: {numbers}")
-                
-                if len(numbers) >= 2:
-                    print(f"Extracted wages: {numbers[0]}")
-                    print(f"Extracted federal tax: {numbers[1]}")
-                    
-                    w2_data['wages_tips_other_compensation'] = float(numbers[0])
-                    w2_data['federal_income_tax_withheld'] = float(numbers[1])
-                else:
-                    error_msg = f"Missing values. Found {len(numbers)} numbers (needed 2)"
-                    print(f"ERROR: {error_msg}")
-                    w2_data['error'] = error_msg
-                    w2_data['raw_line'] = next_line
-                
-                print("=== END DEBUG ===")
-                break
-                
-    except Exception as e:
-        error_msg = f"Parsing error: {str(e)}"
-        print(f"ERROR: {error_msg}")
-        w2_data['error'] = error_msg
-    
-    return w2_data
+def extract_text_with_ocr(pdf_path):
+    """Extract text from scanned PDF using OCR"""
+    doc = fitz.open(pdf_path)
+    text = ""
+    for page in doc:
+        pix = page.get_pixmap()
+        img = Image.open(io.BytesIO(pix.tobytes()))
+        text += pytesseract.image_to_string(img) + "\n"
+    return text
 
 def extract_text_from_pdf(pdf_path):
-    """Extract text from PDF using pdfplumber and print all lines"""
+    """Hybrid text extraction with fallback to OCR"""
     try:
-        print("\n=== START OF EXTRACTED TEXT ===")
-        
+        # First try regular text extraction
         with pdfplumber.open(pdf_path) as pdf:
-            for i, page in enumerate(pdf.pages):
-                text = page.extract_text()
-                if text:
-                    print(f"\n--- Page {i+1} ---")
-                    lines = text.split('\n')
-                    for line_num, line in enumerate(lines, 1):
-                        print(f"Line {line_num}: {line.strip()}")
+            text = "\n".join(page.extract_text() or "" for page in pdf.pages)
         
-        print("\n=== END OF EXTRACTED TEXT ===")
+        # If we get less text (likely scanned PDF), try OCR
+        if len(text.strip()) < 50:
+            return extract_text_with_ocr(pdf_path)
         return text
-        
     except Exception as e:
-        print(f"Error extracting text from PDF: {e}")
+        print(f"PDF text extraction failed: {e}")
+        return extract_text_with_ocr(pdf_path)
+
+def extract_w2_values(text):
+    if not text:
+        return None, None
+    
+    # Split text into lines
+    lines = [line.strip() for line in text.split('\n') if line.strip()]
+    
+    # Find the line containing the labels
+    label_line = None
+    for i, line in enumerate(lines):
+        if ("Employer identification" in line or 
+            "Wages, tips" in line or 
+            "Federal income tax" in line):
+            label_line = i
+            break
+    
+    if label_line is None or label_line + 1 >= len(lines):
+        return None, None
+    
+    # Get the next line after labels
+    values_line = lines[label_line + 1]
+    parts = values_line.split()
+    
+    # Filter out EIN (numbers with hyphens)
+    filtered_numbers = [part for part in parts if '-' not in part]
+    
+    # We need exactly 2 values remaining
+    if len(filtered_numbers) != 2:
+        return None, None
+
+    wages = float(filtered_numbers[0])
+    federal_tax = float(filtered_numbers[1])
+    
+    print(f"Debug - Values line: {values_line}")
+    print(f"Debug - Filtered numbers: {filtered_numbers}")
+    print(f"Debug - Wages: {wages}, Federal Tax: {federal_tax}")
+    
+    return wages, federal_tax
+
+def extract_NEC(text):
+    if not text:
         return None
+    
+    # Split text into lines
+    lines = [line.strip() for line in text.split('\n') if line.strip()]
+    
+    # Find the line containing the labels
+    label_line = None
+    for i, line in enumerate(lines):
+        if ("Copy" in line):
+            label_line = i
+            break
+        
+    if label_line is None or label_line + 1 >= len(lines):
+        return None
+    
+    # Get the next line after labels
+    values_line = lines[label_line + 1]
+    parts = values_line.split()
+    
+    # Filter out EIN and SSN (numbers with hyphens)
+    filtered_numbers = [part for part in parts if '-' not in part and '$' not in part]
+    
+    # We need exactly 1 value remaining
+    if len(filtered_numbers) != 1:
+        return None
+    
+    nonempComp = float(filtered_numbers[0])
+
+    print(f"Debug - Values line: {values_line}")
+    print(f"Debug - Filtered numbers: {filtered_numbers}")
+    print(f"Debug - Nonemployee Compensation: {nonempComp}")
+    
+    return nonempComp
+
+def extract_INT(text):
+    if not text:
+        return None
+    
+    # Split text into lines
+    lines = [line.strip() for line in text.split('\n') if line.strip()]
+    
+    # Find the line containing the labels
+    label_line = None
+    for i, line in enumerate(lines):
+        if ("$" in line):
+            label_line = i
+            break
+        
+    if label_line is None or label_line + 1 >= len(lines):
+        return None
+    
+    # Get the next line after labels
+    values_line = lines[label_line]
+    parts = values_line.split()
+    
+    # Filter out evrything before '$'
+    filtered_numbers = parts[parts.index('$') + 1:] if '$' in parts else []
+    
+    filtered_numbers = [
+        x for x in filtered_numbers
+        if str(x).replace('.', '', 2).isdigit()
+        and '-' not in str(x)  # Also exclude hyphenated numbers (like SSN/EIN)
+    ]
+
+    # Remove last occurrence of '2024' if it exists
+    if '2024' in filtered_numbers:
+        last_2024_index = len(filtered_numbers) - 1 - filtered_numbers[::-1].index('2024')
+        filtered_numbers.pop(last_2024_index)
+    
+    # We need exactly 1 value remaining
+    if len(filtered_numbers) != 1:
+        return None
+    
+    intIncome = float(filtered_numbers[0])
+
+    print(f"Debug - Values line: {values_line}")
+    print(f"Debug - Filtered numbers: {filtered_numbers}")
+    print(f"Debug - Interest Income: {intIncome}")
+    
+    return intIncome
+    
+
+def process_tax_document(text):
+    """Process document and extract values if it's a W-2 form"""
+    if not text:
+        return {"type": "unknown", "data": None}
+    
+    # Check if this is a W-2 form
+    if "W-2" in text or "Wage and Tax Statement" in text:
+        print("Detected W-2 form")
+        wages, federal_tax = extract_w2_values(text)
+        return {
+            "type": "W-2",
+            "data": {
+                "wages": wages,
+                "federal_income_tax_withheld": federal_tax
+            }
+        }
+    # Then check for 1099-NEC
+    elif "NEC" in text or "Nonemployee Compensation" in text:
+        print("Detected 1099-NEC form")
+        nonemp_comp = extract_NEC(text)
+        return {
+            "type": "1099-NEC",
+            "data": {
+                "nonemployee_compensation": nonemp_comp
+            }
+        }
+    # Check for 1099-INT
+    elif "INT" in text or "Interest Income" in text:
+        print("Detected 1099-INT form")
+        intIncome = extract_INT(text)
+        return {
+            "type": "1099-INT",
+            "data": {
+                "interest_income": intIncome,
+            }
+        }
+    else:
+        print("Not a W-2 form")
+        return {"type": "unknown", "data": None}
+
 
 @app.route('/upload', methods=['POST'])
 def upload_files():
@@ -103,23 +223,28 @@ def upload_files():
     saved_files = []
     
     for file in files:
-        if file and allowed_file(file.filename):
+        if file:
             filename = secure_filename(file.filename)
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             
             file.save(filepath)
             
-            # Extract text
+            # Extract text using hybrid approach
             extracted_text = extract_text_from_pdf(filepath)
-            
-            # Parse W-2 specific data
-            w2_data = extract_w2_data(extracted_text) if extracted_text else {}
+
+            # Process the document
+            document_data = process_tax_document(extracted_text)
+
+            #Print to terminal for debugging
+            # print("\n" + "="*50)
+            # print(f"EXTRACTED TEXT FROM: {filename}")
+            # print("="*50)
+            # print(extracted_text)
+            # print("="*50 + "\n")
             
             saved_files.append({
                 'original_name': filename,
                 'saved_name': filename,
-                'extracted_text': extracted_text,
-                'parsed_data': w2_data,
                 'saved_path': filepath
             })
     
