@@ -5,7 +5,8 @@ import Head from 'next/head';
 
 type PersonalInfo = {
   filingStatus: string;
-  dependents: number;
+  dependentChildren: number;
+  otherDependents: number;
 };
 
 type FileResult = {
@@ -19,9 +20,11 @@ export default function TaxReturnUpload() {
   const [uploadStatus, setUploadStatus] = useState('');
   const [personalInfo, setPersonalInfo] = useState<PersonalInfo>({
     filingStatus: '',
-    dependents: 0
+    dependentChildren: 0,
+    otherDependents: 0
   });
-  const [dependentsInput, setDependentsInput] = useState('0');
+  const [dependentChildrenInput, setDependentChildrenInput] = useState('0');
+  const [otherDependentsInput, setOtherDependentsInput] = useState('0');
   const [results, setResults] = useState<FileResult[] | null>(null);
   const isProcessingDisabled = !personalInfo.filingStatus || files.length === 0;
 
@@ -39,12 +42,21 @@ export default function TaxReturnUpload() {
     }));
   };
 
-  const handleDependentsChange = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleDependentChildrenChange = (e: ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    setDependentsInput(value);
+    setDependentChildrenInput(value);
     setPersonalInfo(prev => ({
       ...prev,
-      dependents: value === '' ? 0 : parseInt(value) || 0
+      dependentChildren: value === '' ? 0 : parseInt(value) || 0
+    }));
+  };
+
+  const handleOtherDependentsChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setOtherDependentsInput(value);
+    setPersonalInfo(prev => ({
+      ...prev,
+      otherDependents: value === '' ? 0 : parseInt(value) || 0
     }));
   };
 
@@ -70,7 +82,11 @@ export default function TaxReturnUpload() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(personalInfo),
+        body: JSON.stringify({
+          filingStatus: personalInfo.filingStatus,
+          dependentChildren: personalInfo.dependentChildren,
+          otherDependents: personalInfo.otherDependents
+        }),
       });
 
       if (!personalInfoResponse.ok) {
@@ -146,24 +162,50 @@ export default function TaxReturnUpload() {
           </div>
           
           <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="dependents">
-              Number of Dependents
+            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="dependentChildren">
+              Number of Dependent Children
             </label>
             <input
               type="number"
-              id="dependents"
-              name="dependents"
+              id="dependentChildren"
+              name="dependentChildren"
               min="0"
-              value={dependentsInput}
-              onChange={handleDependentsChange}
+              value={dependentChildrenInput}
+              onChange={handleDependentChildrenChange}
               onFocus={(e) => {
                 if (e.target.value === '0') {
-                  setDependentsInput('');
+                  setDependentChildrenInput('');
                 }
               }}
               onBlur={(e) => {
                 if (e.target.value === '') {
-                  setDependentsInput('0');
+                  setDependentChildrenInput('0');
+                }
+              }}
+              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              required
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="otherDependents">
+              Number of Other Dependents
+            </label>
+            <input
+              type="number"
+              id="otherDependents"
+              name="otherDependents"
+              min="0"
+              value={otherDependentsInput}
+              onChange={handleOtherDependentsChange}
+              onFocus={(e) => {
+                if (e.target.value === '0') {
+                  setOtherDependentsInput('');
+                }
+              }}
+              onBlur={(e) => {
+                if (e.target.value === '') {
+                  setOtherDependentsInput('0');
                 }
               }}
               className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"

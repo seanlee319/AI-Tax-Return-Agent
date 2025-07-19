@@ -9,7 +9,7 @@ from werkzeug.utils import secure_filename
 from pathlib import Path
 from flask_cors import CORS
 from dataclasses import dataclass
-from typing import List
+from typing import List, Tuple
 
 app = Flask(__name__)
 CORS(app)
@@ -250,6 +250,7 @@ def upload_files():
             # print("="*50)
             # print(extracted_text)
             # print("="*50 + "\n")
+            print(personal_info_store)
             
             saved_files.append({
                 'original_name': filename,
@@ -271,14 +272,15 @@ def submit_personal_info():
     data = request.json
     
     # Validate required fields
-    if not data or 'filingStatus' not in data or 'dependents' not in data:
+    if not data or 'filingStatus' not in data or 'dependentChildren' not in data or 'otherDependents' not in data:
         return jsonify({'error': 'Missing required fields'}), 400
     
     try:
         # Store in memory
         personal_info_store.update({
             'filingStatus': data['filingStatus'],
-            'dependents': data['dependents']
+            'dependentChildren': data['dependentChildren'],
+            'otherDependents': data['otherDependents']
         })
         
         print("Current stored personal info:", personal_info_store)
@@ -356,32 +358,63 @@ STANDARD_DEDUCTIONS = {
     'married_joint': 29200,
     'married_separate': 14600,
     'head_of_household': 21900,
-    'widow': 29200  # Same as married filing jointly
+    'widow': 29200
 }
 
-DEPENDENT_DEDUCTION = 500
+CHILD_TAX_CREDIT = 2000
+OTHER_DEPENDENT_CREDIT = 500
 
-# Calculate taxable income after standard deduction and dependent deductions
-def calculate_taxable_income(total_income: float, filing_status: str, dependents: int = 0) -> float:
+PHASE_OUT_THRESHOLDS = {
+    'single': 200000,
+    'married_joint': 400000,
+    'married_separate': 200000,
+    'head_of_household': 200000,
+    'widow': 400000
+}
+PHASE_OUT_RATE = 0.05
+
+def calculate_dependent_credits(filing_status: str, dependent_children: int, other_dependents: int, adjusted_gross_income: float):
+    # Calculate raw credits
+    child_credit = dependent_children * CHILD_TAX_CREDIT
+    other_credit = other_dependents * OTHER_DEPENDENT_CREDIT
+    total_raw_credit = child_credit + other_credit
+    
+    # Apply phase-out if income exceeds threshold
+    threshold = PHASE_OUT_THRESHOLDS[filing_status]
+    if adjusted_gross_income <= threshold:
+        return total_raw_credit
+    
+    excess_income = adjusted_gross_income - threshold
+    phase_out_amount = (excess_income // 1000) * 50
+    phased_out_credit = max(total_raw_credit - phase_out_amount, 0)
+    
+    print(f"Debug - Phase-out calculation:")
+    print(f"  AGI: {adjusted_gross_income}, Threshold: {threshold}")
+    print(f"  Excess: {excess_income}, Phase-out: {phase_out_amount}")
+    print(f"  Raw credit: {total_raw_credit}, Final credit: {phased_out_credit}")
+    
+    return phased_out_credit
+
+def calculate_tax(total_income: float, filing_status: str, dependent_children: int = 0, other_dependents: int = 0) -> Tuple[float, float]:
+    # Calculate taxable income after standard deduction
     standard_deduction = STANDARD_DEDUCTIONS[filing_status]
-    dependent_deductions = dependents * DEPENDENT_DEDUCTION
-    total_deductions = standard_deduction + dependent_deductions
+    taxable_income = max(total_income - standard_deduction, 0)
     
-    taxable_income = total_income - total_deductions
-    return max(taxable_income, 0)  # Can't be negative
-
-def calculate_tax(taxable_income: float, filing_status: str) -> float:
-    brackets = TaxBrackets2024.get_brackets(filing_status)
-    tax = 0.0
+    # Calculate tax before credits
+    tax_before_credits = calculate_tax(taxable_income, filing_status)
     
-    for bracket in brackets:
-        if taxable_income <= bracket.lower:
-            break
-            
-        bracket_income = min(taxable_income, bracket.upper) - bracket.lower
-        tax += bracket_income * bracket.rate
-        
-    return tax
+    # Calculate dependent credits with phase-out
+    dependent_credits = calculate_dependent_credits(
+        filing_status, 
+        dependent_children, 
+        other_dependents, 
+        total_income  # Using AGI for phase-out calculation
+    )
+    
+    # Apply credits (can't reduce tax below zero)
+    final_tax = max(tax_before_credits - dependent_credits, 0)
+    
+    return final_tax, dependent_credits
 
 if __name__ == '__main__':
     app.run(debug=True)
