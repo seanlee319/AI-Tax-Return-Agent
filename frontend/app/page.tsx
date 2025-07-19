@@ -19,9 +19,9 @@ export default function TaxReturnUpload() {
   const [uploadStatus, setUploadStatus] = useState('');
   const [personalInfo, setPersonalInfo] = useState<PersonalInfo>({
     filingStatus: '',
-    dependents: 0  // Numeric value in state
+    dependents: 0
   });
-  const [dependentsInput, setDependentsInput] = useState('0');  // Display value
+  const [dependentsInput, setDependentsInput] = useState('0');
   const [results, setResults] = useState<FileResult[] | null>(null);
   const isProcessingDisabled = !personalInfo.filingStatus || files.length === 0;
 
@@ -48,56 +48,24 @@ export default function TaxReturnUpload() {
     }));
   };
 
-const handleSubmitFiles = async (e: FormEvent) => {
-  e.preventDefault();
-  
-  if (files.length === 0) {
-    setUploadStatus('Please select at least one file');
-    return;
-  }
-
-  try {
-    setUploadStatus('Uploading files...');
-    
-    const formData = new FormData();
-    files.forEach(file => formData.append('files', file));
-
-    const response = await fetch('http://localhost:5000/upload', {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Server responded with status ${response.status}`);
-    }
-
-    const data = await response.json();
-    
-    // Check for errors in processed files
-    const errorFiles = data.files.filter((file: any) => file.error);
-    if (errorFiles.length > 0) {
-      // Join all error messages without "undefined"
-      const errorMessages = errorFiles.map((file: any) => file.error).join('\n');
-      setUploadStatus(errorMessages);
-    } else {
-      setResults(data.files.map((file: any) => ({
-        filename: file.original_name,
-        message: `Saved as ${file.saved_name}`,
-        text: file.extracted_text || 'File processed successfully'
-      })));
-      setUploadStatus('Files uploaded successfully!');
-    }
-    
-  } catch (error) {
-    console.error('Upload error:', error);
-    setUploadStatus(`Error: ${error instanceof Error ? error.message : 'Failed to upload files'}`);
-  }
-};
-
-  const handleSubmitPersonalInfo = async (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    
+    if (files.length === 0) {
+      setUploadStatus('Please select at least one file');
+      return;
+    }
+
+    if (!personalInfo.filingStatus) {
+      setUploadStatus('Please select a filing status');
+      return;
+    }
+
     try {
-      const response = await fetch('http://localhost:5000/submit-personal-info', {
+      setUploadStatus('Uploading files and submitting personal information...');
+      
+      // First submit personal info
+      const personalInfoResponse = await fetch('http://localhost:5000/submit-personal-info', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -105,14 +73,41 @@ const handleSubmitFiles = async (e: FormEvent) => {
         body: JSON.stringify(personalInfo),
       });
 
-      const data = await response.json();
-      if (response.ok) {
-        setUploadStatus('Personal information submitted successfully!');
-      } else {
-        setUploadStatus(`Error: ${data.error}`);
+      if (!personalInfoResponse.ok) {
+        throw new Error('Failed to submit personal information');
       }
+
+      // Then upload files
+      const formData = new FormData();
+      files.forEach(file => formData.append('files', file));
+
+      const filesResponse = await fetch('http://localhost:5000/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!filesResponse.ok) {
+        throw new Error(`Server responded with status ${filesResponse.status}`);
+      }
+
+      const data = await filesResponse.json();
+      
+      const errorFiles = data.files.filter((file: any) => file.error);
+      if (errorFiles.length > 0) {
+        const errorMessages = errorFiles.map((file: any) => file.error).join('\n');
+        setUploadStatus(errorMessages);
+      } else {
+        setResults(data.files.map((file: any) => ({
+          filename: file.original_name,
+          message: `Saved as ${file.saved_name}`,
+          text: file.extracted_text || 'File processed successfully'
+        })));
+        setUploadStatus('Files uploaded and personal information submitted successfully!');
+      }
+      
     } catch (error) {
-      setUploadStatus(`Error: ${(error as Error).message}`);
+      console.error('Error:', error);
+      setUploadStatus(`Error: ${error instanceof Error ? error.message : 'Failed to process request'}`);
     }
   };
 
@@ -125,8 +120,8 @@ const handleSubmitFiles = async (e: FormEvent) => {
       <div className="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden md:max-w-2xl p-6">
         <h1 className="text-2xl font-bold text-gray-800 mb-6">AI Tax Return Agent</h1>
         
-        {/* Personal Information Form */}
-        <form onSubmit={handleSubmitPersonalInfo} className="mb-8">
+        {/* Personal Information Section */}
+        <div className="mb-8">
           <h2 className="text-lg font-semibold mb-4">Personal Information</h2>
           
           <div className="mb-4">
@@ -175,17 +170,10 @@ const handleSubmitFiles = async (e: FormEvent) => {
               required
             />
           </div>
-          
-          <button
-            type="submit"
-            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-          >
-            Save Personal Info
-          </button>
-        </form>
+        </div>
         
         {/* File Upload Form */}
-        <form onSubmit={handleSubmitFiles}>
+        <form onSubmit={handleSubmit}>
           <h2 className="text-lg font-semibold mb-4">Upload Tax Documents</h2>
           <p className="text-sm text-gray-600 mb-4">
             Supported documents: W-2, 1099-INT, 1099-NEC (PDF format)

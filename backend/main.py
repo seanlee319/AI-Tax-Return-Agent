@@ -9,7 +9,7 @@ from werkzeug.utils import secure_filename
 from pathlib import Path
 from flask_cors import CORS
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List
 
 app = Flask(__name__)
 CORS(app)
@@ -350,7 +350,38 @@ class TaxBrackets2024:
         }
         return status_map[filing_status]
     
+# Tax deductions based on filinig status
+STANDARD_DEDUCTIONS = {
+    'single': 14600,
+    'married_joint': 29200,
+    'married_separate': 14600,
+    'head_of_household': 21900,
+    'widow': 29200  # Same as married filing jointly
+}
 
+DEPENDENT_DEDUCTION = 500
+
+# Calculate taxable income after standard deduction and dependent deductions
+def calculate_taxable_income(total_income: float, filing_status: str, dependents: int = 0) -> float:
+    standard_deduction = STANDARD_DEDUCTIONS[filing_status]
+    dependent_deductions = dependents * DEPENDENT_DEDUCTION
+    total_deductions = standard_deduction + dependent_deductions
+    
+    taxable_income = total_income - total_deductions
+    return max(taxable_income, 0)  # Can't be negative
+
+def calculate_tax(taxable_income: float, filing_status: str) -> float:
+    brackets = TaxBrackets2024.get_brackets(filing_status)
+    tax = 0.0
+    
+    for bracket in brackets:
+        if taxable_income <= bracket.lower:
+            break
+            
+        bracket_income = min(taxable_income, bracket.upper) - bracket.lower
+        tax += bracket_income * bracket.rate
+        
+    return tax
 
 if __name__ == '__main__':
     app.run(debug=True)
