@@ -65,7 +65,6 @@ const handleSubmitFiles = async (e: FormEvent) => {
     const response = await fetch('http://localhost:5000/upload', {
       method: 'POST',
       body: formData,
-      // Don't set Content-Type header - the browser will set it automatically with the boundary
     });
 
     if (!response.ok) {
@@ -73,12 +72,21 @@ const handleSubmitFiles = async (e: FormEvent) => {
     }
 
     const data = await response.json();
-    setResults(data.files.map((file: any) => ({
-      filename: file.original_name,
-      message: `Saved as ${file.saved_name}`,
-      text: 'File stored successfully'
-    })));
-    setUploadStatus('Files uploaded successfully!');
+    
+    // Check for errors in processed files
+    const errorFiles = data.files.filter((file: any) => file.error);
+    if (errorFiles.length > 0) {
+      // Join all error messages without "undefined"
+      const errorMessages = errorFiles.map((file: any) => file.error).join('\n');
+      setUploadStatus(errorMessages);
+    } else {
+      setResults(data.files.map((file: any) => ({
+        filename: file.original_name,
+        message: `Saved as ${file.saved_name}`,
+        text: file.extracted_text || 'File processed successfully'
+      })));
+      setUploadStatus('Files uploaded successfully!');
+    }
     
   } catch (error) {
     console.error('Upload error:', error);
@@ -138,7 +146,7 @@ const handleSubmitFiles = async (e: FormEvent) => {
               <option value="married_joint">Married Filing Jointly</option>
               <option value="married_separate">Married Filing Separately</option>
               <option value="head_of_household">Head of Household</option>
-              <option value="widower">Qualifying Widow(er)</option>
+              <option value="widow">Qualifying Widow</option>
             </select>
           </div>
           
@@ -228,7 +236,12 @@ const handleSubmitFiles = async (e: FormEvent) => {
         
         {/* Status and Results */}
         {uploadStatus && (
-          <div className={`mt-4 p-3 rounded ${uploadStatus.includes('Error') ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+          <div className={`mt-4 p-3 rounded ${
+            uploadStatus.includes('Error') || 
+            uploadStatus.includes('Please upload a W-2, 1099-NEC, or a 1099-INT form')
+              ? 'bg-red-100 text-red-700' 
+              : 'bg-blue-100 text-blue-700'
+          }`}>
             {uploadStatus}
           </div>
         )}
