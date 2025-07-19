@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, ChangeEvent, FormEvent } from 'react';
+import { useState, ChangeEvent, FormEvent, useEffect } from 'react';
 import Head from 'next/head';
 
 type PersonalInfo = {
@@ -27,6 +27,28 @@ export default function TaxReturnUpload() {
   const [otherDependentsInput, setOtherDependentsInput] = useState('0');
   const [results, setResults] = useState<FileResult[] | null>(null);
   const isProcessingDisabled = !personalInfo.filingStatus || files.length === 0;
+  const [taxResults, setTaxResults] = useState<any>(null);
+  
+  // Reset state on page refresh
+  useEffect(() => {
+    // Reset frontend state
+    setFiles([]);
+    setResults(null);
+    setTaxResults(null);
+    
+    // Clear backend uploads folder
+    const clearUploads = async () => {
+      try {
+        await fetch('http://localhost:5000/clear-uploads', {
+          method: 'POST'
+        });
+      } catch (error) {
+        console.error('Error clearing uploads:', error);
+      }
+    };
+    clearUploads();
+  }, []);
+
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -124,6 +146,19 @@ export default function TaxReturnUpload() {
     } catch (error) {
       console.error('Error:', error);
       setUploadStatus(`Error: ${error instanceof Error ? error.message : 'Failed to process request'}`);
+    }
+  };
+
+  const handleCalculateTax = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/calculate-tax');
+      if (!response.ok) {
+        throw new Error('Failed to calculate tax');
+      }
+      const data = await response.json();
+      setTaxResults(data.results);
+    } catch (error) {
+      setUploadStatus(`Error calculating tax: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -241,27 +276,45 @@ export default function TaxReturnUpload() {
             />
           </div>
           
-          <button
-            type="submit"
-            disabled={isProcessingDisabled}
-            className={`${
-              isProcessingDisabled
-                ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-green-500 hover:bg-green-700'
-            } text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline`}
-          >
-            Upload and Process Files
-          </button>
-          {isProcessingDisabled && personalInfo.filingStatus === '' && (
-            <p className="text-xs text-red-500 mt-1">
-              Please select a filing status first
-            </p>
-          )}
-          {isProcessingDisabled && files.length === 0 && (
-            <p className="text-xs text-red-500 mt-1">
-              Please select at least one file to upload
-            </p>
-          )}
+          <div className="flex flex-col space-y-4">
+            <div className="flex space-x-4">
+              <button
+                type="submit"
+                disabled={isProcessingDisabled}
+                className={`${
+                  isProcessingDisabled
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-green-500 hover:bg-green-700'
+                } text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline flex-1`}
+              >
+                Upload and Process Files
+              </button>
+              
+              <button
+                type="button"
+                onClick={handleCalculateTax}
+                disabled={!results}
+                className={`${
+                  !results
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-blue-500 hover:bg-blue-700'
+                } text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline flex-1`}
+              >
+                Calculate Tax
+              </button>
+            </div>
+
+            {isProcessingDisabled && personalInfo.filingStatus === '' && (
+              <p className="text-xs text-red-500">
+                Please select a filing status first
+              </p>
+            )}
+            {isProcessingDisabled && files.length === 0 && (
+              <p className="text-xs text-red-500">
+                Please select at least one file to upload
+              </p>
+            )}
+          </div>
         </form>
         
         {/* Status and Results */}
@@ -291,6 +344,44 @@ export default function TaxReturnUpload() {
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+        {taxResults && (
+          <div className="mt-6 p-4 bg-green-50 rounded-lg">
+            <h3 className="text-lg font-semibold mb-2">Tax Calculation Results</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="font-medium">Total Income:</p>
+                <p>${taxResults.total_income.toFixed(2)}</p>
+              </div>
+              <div>
+                <p className="font-medium">Tax Owed:</p>
+                <p>${taxResults.tax_owed.toFixed(2)}</p>
+              </div>
+              <div>
+                <p className="font-medium">Federal Tax Withheld:</p>
+                <p>${taxResults.federal_withheld.toFixed(2)}</p>
+              </div>
+              <div>
+                <p className="font-medium">Refund/Amount Due:</p>
+                <p className={taxResults.refund_or_due >= 0 ? 'text-green-600' : 'text-red-600'}>
+                  ${Math.abs(taxResults.refund_or_due).toFixed(2)} 
+                  {taxResults.refund_or_due >= 0 ? ' Refund' : ' Due'}
+                </p>
+              </div>
+              <div>
+                <p className="font-medium">Credits Applied:</p>
+                <p>${taxResults.credits_applied.toFixed(2)}</p>
+              </div>
+            </div>
+            <div className="mt-4">
+              <h4 className="font-medium mb-1">Income Breakdown:</h4>
+              <ul className="text-sm">
+                <li>Wages: ${taxResults.breakdown.wages.toFixed(2)}</li>
+                <li>1099-NEC Income: ${taxResults.breakdown.nec_income.toFixed(2)}</li>
+                <li>1099-INT Income: ${taxResults.breakdown.interest_income.toFixed(2)}</li>
+              </ul>
+            </div>
           </div>
         )}
       </div>

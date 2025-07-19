@@ -1,4 +1,5 @@
 import os
+import shutil
 import pdfplumber
 import pytesseract
 from PIL import Image
@@ -22,6 +23,22 @@ UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 Path(UPLOAD_FOLDER).mkdir(parents=True, exist_ok=True)
+
+# Clear uploads folder on startup
+if os.path.exists(UPLOAD_FOLDER):
+    shutil.rmtree(UPLOAD_FOLDER)
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+#Clear the 'uploads' file on refresh
+@app.route('/clear-uploads', methods=['POST'])
+def clear_uploads():
+    try:
+        if os.path.exists(UPLOAD_FOLDER):
+            shutil.rmtree(UPLOAD_FOLDER)
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+        return jsonify({'success': True, 'message': 'Uploads folder cleared'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 #Extract text from scanned PDF using OCR
 def extract_text_with_ocr(pdf_path):
@@ -251,7 +268,7 @@ def upload_files():
             # print(extracted_text)
             # print("="*50 + "\n")
             print(personal_info_store)
-            
+
             saved_files.append({
                 'original_name': filename,
                 'saved_name': filename,
@@ -395,7 +412,22 @@ def calculate_dependent_credits(filing_status: str, dependent_children: int, oth
     
     return phased_out_credit
 
-def calculate_tax(total_income: float, filing_status: str, dependent_children: int = 0, other_dependents: int = 0) -> Tuple[float, float]:
+def calculate_tax(taxable_income: float, filing_status: str) -> float:
+    """Calculate tax based on taxable income and filing status."""
+    brackets = TaxBrackets2024.get_brackets(filing_status)
+    tax = 0.0
+    
+    for bracket in brackets:
+        if taxable_income <= bracket.lower:
+            break
+            
+        bracket_amount = min(taxable_income, bracket.upper) - bracket.lower
+        tax += bracket_amount * bracket.rate
+        
+    return tax
+
+def calculate_total_tax(total_income: float, filing_status: str, dependent_children: int = 0, other_dependents: int = 0) -> Tuple[float, float]:
+    """Calculate total tax including credits."""
     # Calculate taxable income after standard deduction
     standard_deduction = STANDARD_DEDUCTIONS[filing_status]
     taxable_income = max(total_income - standard_deduction, 0)
@@ -408,13 +440,61 @@ def calculate_tax(total_income: float, filing_status: str, dependent_children: i
         filing_status, 
         dependent_children, 
         other_dependents, 
-        total_income  # Using AGI for phase-out calculation
+        total_income
     )
     
     # Apply credits (can't reduce tax below zero)
     final_tax = max(tax_before_credits - dependent_credits, 0)
     
     return final_tax, dependent_credits
+
+@app.route('/calculate-tax', methods=['GET'])
+def calculate_tax_endpoint():
+    try:
+        # Get total income from all sources
+        total_income = (
+            extracted_data_store["wages"] +
+            extracted_data_store["nec_income"] +
+            extracted_data_store["interest_income"]
+        )
+        
+        if not personal_info_store:
+            return jsonify({'error': 'Personal information not provided'}), 400
+            
+        filing_status = personal_info_store['filingStatus']
+        dependent_children = personal_info_store['dependentChildren']
+        other_dependents = personal_info_store['otherDependents']
+        
+        # Calculate taxes
+        tax_owed, credits = calculate_total_tax(
+            total_income,
+            filing_status,
+            dependent_children,
+            other_dependents
+        )
+        
+        # Calculate refund or amount due
+        federal_withheld = extracted_data_store["federal_withheld"]
+        refund_or_due = federal_withheld - tax_owed
+        
+        return jsonify({
+            'success': True,
+            'results': {
+                'total_income': total_income,
+                'tax_owed': tax_owed,
+                'federal_withheld': federal_withheld,
+                'refund_or_due': refund_or_due,
+                'credits_applied': credits,
+                'breakdown': {
+                    'wages': extracted_data_store["wages"],
+                    'nec_income': extracted_data_store["nec_income"],
+                    'interest_income': extracted_data_store["interest_income"]
+                }
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
