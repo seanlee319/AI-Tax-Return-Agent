@@ -11,6 +11,7 @@ from pathlib import Path
 from flask_cors import CORS
 from dataclasses import dataclass
 from typing import List, Tuple
+from PyPDF2 import PdfReader, PdfWriter
 
 app = Flask(__name__)
 CORS(app)
@@ -464,14 +465,14 @@ def calculate_tax(taxable_income: float, filing_status: str) -> float:
     """Calculate tax based on taxable income and filing status."""
     brackets = TaxBrackets2024.get_brackets(filing_status)
     tax = 0.0
-    
+
     for bracket in brackets:
-        if taxable_income <= bracket.lower:
-            break
-            
-        bracket_amount = min(taxable_income, bracket.upper) - bracket.lower
-        tax += bracket_amount * bracket.rate
-        
+        if taxable_income > bracket.lower:
+            bracket_amount = min(taxable_income, bracket.upper) - bracket.lower
+            tax += bracket_amount * bracket.rate
+        else:
+            break  # No more income to tax
+    
     return tax
 
 def calculate_total_tax(total_income: float, filing_status: str, dependent_children: int = 0, other_dependents: int = 0) -> Tuple[float, float]:
@@ -494,36 +495,43 @@ def calculate_total_tax(total_income: float, filing_status: str, dependent_child
     # Apply credits (can't reduce tax below zero)
     final_tax = max(tax_before_credits - dependent_credits, 0)
     
-    return final_tax, dependent_credits
+    return tax_before_credits, final_tax, dependent_credits
 
 @app.route('/calculate-tax', methods=['GET'])
 def calculate_tax_endpoint():
     try:
-        # Get total income from all sources
-        total_income = (
-            extracted_data_store["wages"] +
-            extracted_data_store["nec_income"] +
-            extracted_data_store["interest_income"]
-        )
+        # Get income from all sources (initialize to 0 if missing)
+        wages = extracted_data_store.get("wages", 0.0)
+        nec_income = extracted_data_store.get("nec_income", 0.0)
+        interest_income = extracted_data_store.get("interest_income", 0.0)
+        total_income = wages + nec_income + interest_income
         
         if not personal_info_store:
-            return jsonify({'error': 'Personal information not provided'}), 400
+            return jsonify({'error': 'Personal information missing'}), 400
             
-        filing_status = personal_info_store['filingStatus']
-        dependent_children = personal_info_store['dependentChildren']
-        other_dependents = personal_info_store['otherDependents']
-        
-        # Calculate taxes
-        tax_owed, credits = calculate_total_tax(
+        # Calculate tax
+        tax_no_credits, tax_owed, credits = calculate_total_tax(
             total_income,
-            filing_status,
-            dependent_children,
-            other_dependents
+            personal_info_store['filingStatus'],
+            personal_info_store['dependentChildren'],
+            personal_info_store['otherDependents']
         )
         
-        # Calculate refund or amount due
-        federal_withheld = extracted_data_store["federal_withheld"]
+        federal_withheld = extracted_data_store.get("federal_withheld", 0.0)
         refund_or_due = federal_withheld - tax_owed
+        
+        # Generate filled 1040 form
+        filled_form_path = fill_1040_form(
+            wages=wages,
+            federal_withheld=federal_withheld,
+            total_income=total_income,
+            tax_no_credits = tax_no_credits,
+            tax_owed=tax_owed,
+            refund_or_due=refund_or_due,
+            filing_status=personal_info_store['filingStatus'],
+            dependent_children=personal_info_store['dependentChildren'],
+            other_dependents=personal_info_store['otherDependents']
+        )
         
         return jsonify({
             'success': True,
@@ -533,16 +541,103 @@ def calculate_tax_endpoint():
                 'federal_withheld': federal_withheld,
                 'refund_or_due': refund_or_due,
                 'credits_applied': credits,
-                'breakdown': {
-                    'wages': extracted_data_store["wages"],
-                    'nec_income': extracted_data_store["nec_income"],
-                    'interest_income': extracted_data_store["interest_income"]
-                }
+                'breakdown': {  # Ensure this always exists
+                    'wages': wages,
+                    'nec_income': nec_income,
+                    'interest_income': interest_income
+                },
+                'form_generated': bool(filled_form_path)
             }
         })
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def fill_1040_form(wages: float, federal_withheld: float, total_income: float, tax_no_credits: float, 
+                  tax_owed: float, refund_or_due: float, filing_status: str,
+                  dependent_children: int, other_dependents: int):
+    try:
+        # Create outputs directory
+        outputs_dir = os.path.join(BASE_DIR, 'outputs')
+        os.makedirs(outputs_dir, exist_ok=True)
+        
+        # File paths
+        template_path = os.path.join(BASE_DIR, '1040_template.pdf')
+        output_path = os.path.join(outputs_dir, 'filled_1040.pdf')
+        
+        # Read template
+        reader = PdfReader(template_path)
+        writer = PdfWriter()
+        
+        # Copy pages
+        for page in reader.pages:
+            writer.add_page(page)
+            
+        # Calculate values
+        standard_deduction = STANDARD_DEDUCTIONS.get(filing_status, 14600)
+        taxable_income = max(total_income - standard_deduction, 0)
+        total_credits = (dependent_children * CHILD_TAX_CREDIT) + (other_dependents * OTHER_DEPENDENT_CREDIT)
+        
+        # Field mappings - using the actual field names from your template
+        field_values = {
+            # Page 1 - Income
+            'f1_32[0]': f"{wages:.2f}",                # Wages (line 1a)
+            'f1_54[0]': f"{total_income:.2f}",         # Total income (line 9) - CORRECTED
+            'f1_57[0]': f"{standard_deduction:.2f}",   # Standard deduction (line 12)
+            'f1_59[0]': f"{standard_deduction:.2f}",   # Standard deduction (line 14)
+            'f1_60[0]': f"{taxable_income:.2f}",       # Taxable income (line 15)
+            
+            # Page 2 - Tax
+            'f2_02[0]': f"{tax_no_credits:.2f}",            # Tax (line 16)
+            'f2_04[0]': f"{tax_no_credits:.2f}",            # Total tax (line 18)
+            'f2_05[0]': f"{total_credits:.2f}",       # Credits (line 19)
+            'f2_07[0]': f"{total_credits:.2f}",       # Total Credits (line 21)
+            'f2_10[0]': f"{tax_owed:.2f}",      # Total tax (line 24)
+            
+            # Payments
+            'f2_11[0]': f"{federal_withheld:.2f}",     # Federal withheld (line 25a)
+            'f2_14[0]': f"{federal_withheld:.2f}",     # Total Federal withheld (line 25d)
+            'f2_22[0]': f"{federal_withheld:.2f}",     # Total payments (line 33)
+            
+            # Filing status checkboxes
+            'c1_01[0]': filing_status == 'single',
+            'c1_02[0]': filing_status == 'married_joint',
+            'c1_03[0]': filing_status == 'married_separate',
+            'c1_04[0]': filing_status == 'head_of_household',
+            'c1_05[0]': filing_status == 'widow'
+        }
+
+        # Handle refund/amount due
+        if refund_or_due >= 0:
+            field_values.update({
+                'f2_23[0]': f"{refund_or_due:.2f}",   # Amount overpaid (line 34)
+                'f2_24[0]': f"{refund_or_due:.2f}"     # Refund amount (line 35a)
+            })
+        else:
+            field_values.update({
+                'f2_28[0]': f"{-refund_or_due:.2f}",  # Amount due (line 37)
+                'f2_29[0]': f"{-refund_or_due:.2f}"   # Amount you owe (line 38)
+            })
+
+        # Update fields
+        for page in writer.pages:
+            writer.update_page_form_field_values(
+                page,
+                {k: v for k, v in field_values.items()}
+            )
+        
+        # Save filled form
+        with open(output_path, 'wb') as output_file:
+            writer.write(output_file)
+            
+        return output_path
+        
+    except Exception as e:
+        print(f"Error filling 1040 form: {e}")
+        return None
 
 if __name__ == '__main__':
     app.run(debug=True)
