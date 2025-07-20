@@ -244,7 +244,7 @@ export default function TaxReturnUpload() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[#25816a] py-12 px-4 sm:px-6 lg:px-8">
       <Head>
         <title>AI Tax Return Agent</title>
       </Head>
@@ -447,7 +447,7 @@ export default function TaxReturnUpload() {
           <div className="mt-4">
             <button
               onClick={handleResetUploads}
-              className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+              className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
             >
               Reset All Uploads
             </button>

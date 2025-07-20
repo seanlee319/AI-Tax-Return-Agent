@@ -92,7 +92,7 @@ def extract_text_from_pdf(pdf_path):
 
 def extract_w2_values(text):
     if not text:
-        return None, None
+        return None, None, "Empty document"
     
     # Split text into lines
     lines = [line.strip() for line in text.split('\n') if line.strip()]
@@ -107,7 +107,7 @@ def extract_w2_values(text):
             break
     
     if label_line is None or label_line + 1 >= len(lines):
-        return None, None
+        return None, None, "Could not find W-2 data labels"
     
     # Get the next line after labels
     values_line = lines[label_line + 1]
@@ -118,20 +118,23 @@ def extract_w2_values(text):
     
     # We need exactly 2 values remaining
     if len(filtered_numbers) != 2:
-        return None, None
+        return None, None, f"Missing values in W-2 form (expected 2 numbers, found {len(filtered_numbers)})"
 
-    wages = float(filtered_numbers[0])
-    federal_tax = float(filtered_numbers[1])
+    try:
+        wages = float(filtered_numbers[0])
+        federal_tax = float(filtered_numbers[1])
+    except ValueError:
+        return None, None, "Invalid number format in W-2 values"
     
     print(f"Debug - Values line: {values_line}")
     print(f"Debug - Filtered numbers: {filtered_numbers}")
     print(f"Debug - Wages: {wages}, Federal Tax: {federal_tax}")
     
-    return wages, federal_tax
+    return wages, federal_tax, None
 
 def extract_NEC(text):
     if not text:
-        return None
+        return None, "Empty document"
     
     # Split text into lines
     lines = [line.strip() for line in text.split('\n') if line.strip()]
@@ -144,7 +147,7 @@ def extract_NEC(text):
             break
         
     if label_line is None or label_line + 1 >= len(lines):
-        return None
+        return None, "Could not find 1099-NEC data labels"
     
     # Get the next line after labels
     values_line = lines[label_line + 1]
@@ -155,19 +158,22 @@ def extract_NEC(text):
     
     # We need exactly 1 value remaining
     if len(filtered_numbers) != 1:
-        return None
-    
-    nec_income = float(filtered_numbers[0])
+        return None, f"Missing values in 1099-NEC form (expected 1 number, found {len(filtered_numbers)})"
+
+    try:
+        nec_income = float(filtered_numbers[0])
+    except ValueError:
+        return None, "Invalid number format in 1099-NEC values"
 
     print(f"Debug - Values line: {values_line}")
     print(f"Debug - Filtered numbers: {filtered_numbers}")
     print(f"Debug - Nonemployee Compensation: {nec_income}")
     
-    return nec_income
+    return nec_income, None
 
 def extract_INT(text):
     if not text:
-        return None
+        return None, "Empty document"
     
     # Split text into lines
     lines = [line.strip() for line in text.split('\n') if line.strip()]
@@ -180,13 +186,13 @@ def extract_INT(text):
             break
         
     if label_line is None or label_line + 1 >= len(lines):
-        return None
+        return None, "Could not find 1099-INT data labels"
     
     # Get the next line after labels
     values_line = lines[label_line]
     parts = values_line.split()
     
-    # Filter out evrything before '$'
+    # Filter out everything before '$'
     filtered_numbers = parts[parts.index('$') + 1:] if '$' in parts else []
     
     filtered_numbers = [
@@ -202,15 +208,18 @@ def extract_INT(text):
     
     # We need exactly 1 value remaining
     if len(filtered_numbers) != 1:
-        return None
-    
-    int_income = float(filtered_numbers[0])
+        return None, f"Missing values in 1099-INT form (expected 1 number, found {len(filtered_numbers)})"
+
+    try:
+        int_income = float(filtered_numbers[0])
+    except ValueError:
+        return None, "Invalid number format in 1099-INT values"
 
     print(f"Debug - Values line: {values_line}")
     print(f"Debug - Filtered numbers: {filtered_numbers}")
     print(f"Debug - Interest Income: {int_income}")
     
-    return int_income
+    return int_income, None
     
 #Global storage for values needed for tax calculation
 extracted_data_store = {
@@ -233,13 +242,16 @@ def reset_data_store():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 def process_tax_document(text):
-    #Process document and extract values
+    # Process document and extract values
     if not text:
         return {"type": "unknown", "error": "Empty document"}
 
     # Check document type
     if "W-2" in text or "Wage and Tax Statement" in text:
-        wages, federal_tax = extract_w2_values(text)
+        wages, federal_tax, error = extract_w2_values(text)
+        if error:
+            return {"type": "W-2", "error": error}
+            
         extracted_data_store["wages"] += wages
         extracted_data_store["federal_withheld"] += federal_tax
         return {
@@ -250,7 +262,10 @@ def process_tax_document(text):
             }
         }
     elif "NEC" in text or "Nonemployee Compensation" in text:
-        nec_income = extract_NEC(text)
+        nec_income, error = extract_NEC(text)
+        if error:
+            return {"type": "1099-NEC", "error": error}
+            
         extracted_data_store["nec_income"] += nec_income
         return {
             "type": "1099-NEC",
@@ -259,7 +274,10 @@ def process_tax_document(text):
             }
         }
     elif "INT" in text or "Interest Income" in text:
-        int_income = extract_INT(text)
+        int_income, error = extract_INT(text)
+        if error:
+            return {"type": "1099-INT", "error": error}
+            
         extracted_data_store["interest_income"] += int_income
         return {
             "type": "1099-INT",
