@@ -5,7 +5,7 @@ import pytesseract
 from PIL import Image
 import io
 import fitz
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from werkzeug.utils import secure_filename
 from pathlib import Path
 from flask_cors import CORS
@@ -524,6 +524,8 @@ def calculate_tax_endpoint():
         filled_form_path = fill_1040_form(
             wages=wages,
             federal_withheld=federal_withheld,
+            nec_income = nec_income,
+            interest_income = interest_income,
             total_income=total_income,
             tax_no_credits = tax_no_credits,
             tax_owed=tax_owed,
@@ -556,9 +558,10 @@ def calculate_tax_endpoint():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-def fill_1040_form(wages: float, federal_withheld: float, total_income: float, tax_no_credits: float, 
-                  tax_owed: float, refund_or_due: float, filing_status: str,
-                  dependent_children: int, other_dependents: int):
+def fill_1040_form(wages: float, nec_income: float, interest_income: float,
+                   federal_withheld: float, total_income: float, 
+                   tax_no_credits: float, tax_owed: float, refund_or_due: float, 
+                   filing_status: str, dependent_children: int, other_dependents: int):
     try:
         # Create outputs directory
         outputs_dir = os.path.join(BASE_DIR, 'outputs')
@@ -585,36 +588,31 @@ def fill_1040_form(wages: float, federal_withheld: float, total_income: float, t
         field_values = {
             # Page 1 - Income
             'f1_32[0]': f"{wages:.2f}",                # Wages (line 1a)
-            'f1_54[0]': f"{total_income:.2f}",         # Total income (line 9) - CORRECTED
+            'f1_43[0]': f"{interest_income:.2f}",      # Taxable interest (line 2b)
+            'f1_53[0]': f"{nec_income:.2f}",           # Nonemployee Compensation (line 8)
+            'f1_54[0]': f"{total_income:.2f}",         # Total income (line 9)
             'f1_57[0]': f"{standard_deduction:.2f}",   # Standard deduction (line 12)
             'f1_59[0]': f"{standard_deduction:.2f}",   # Standard deduction (line 14)
             'f1_60[0]': f"{taxable_income:.2f}",       # Taxable income (line 15)
             
             # Page 2 - Tax
-            'f2_02[0]': f"{tax_no_credits:.2f}",            # Tax (line 16)
-            'f2_04[0]': f"{tax_no_credits:.2f}",            # Total tax (line 18)
-            'f2_05[0]': f"{total_credits:.2f}",       # Credits (line 19)
-            'f2_07[0]': f"{total_credits:.2f}",       # Total Credits (line 21)
-            'f2_10[0]': f"{tax_owed:.2f}",      # Total tax (line 24)
+            'f2_02[0]': f"{tax_no_credits:.2f}",       # Tax (line 16)
+            'f2_04[0]': f"{tax_no_credits:.2f}",       # Total tax (line 18)
+            'f2_05[0]': f"{total_credits:.2f}",        # Credits (line 19)
+            'f2_07[0]': f"{total_credits:.2f}",        # Total Credits (line 21)
+            'f2_10[0]': f"{tax_owed:.2f}",             # Total tax (line 24)
             
             # Payments
             'f2_11[0]': f"{federal_withheld:.2f}",     # Federal withheld (line 25a)
             'f2_14[0]': f"{federal_withheld:.2f}",     # Total Federal withheld (line 25d)
             'f2_22[0]': f"{federal_withheld:.2f}",     # Total payments (line 33)
-            
-            # Filing status checkboxes
-            'c1_01[0]': filing_status == 'single',
-            'c1_02[0]': filing_status == 'married_joint',
-            'c1_03[0]': filing_status == 'married_separate',
-            'c1_04[0]': filing_status == 'head_of_household',
-            'c1_05[0]': filing_status == 'widow'
         }
 
         # Handle refund/amount due
         if refund_or_due >= 0:
             field_values.update({
                 'f2_23[0]': f"{refund_or_due:.2f}",   # Amount overpaid (line 34)
-                'f2_24[0]': f"{refund_or_due:.2f}"     # Refund amount (line 35a)
+                'f2_24[0]': f"{refund_or_due:.2f}"    # Refund amount (line 35a)
             })
         else:
             field_values.update({
@@ -638,6 +636,23 @@ def fill_1040_form(wages: float, federal_withheld: float, total_income: float, t
     except Exception as e:
         print(f"Error filling 1040 form: {e}")
         return None
+    
+@app.route('/outputs/<filename>', methods=['GET'])
+def serve_output_file(filename):
+    try:
+        # Only allow access to specific files for security
+        if filename != 'filled_1040.pdf':
+            return jsonify({'error': 'File not found'}), 404
+            
+        outputs_dir = os.path.join(BASE_DIR, 'outputs')
+        filepath = os.path.join(outputs_dir, filename)
+        
+        if not os.path.exists(filepath):
+            return jsonify({'error': 'File not found'}), 404
+            
+        return send_file(filepath, as_attachment=False)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -30,9 +30,11 @@ export default function TaxReturnUpload() {
   const isProcessingDisabled = !personalInfo.filingStatus || files.length === 0;
   const [taxResults, setTaxResults] = useState<any>(null);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-  
+  const [showFormPreview, setShowFormPreview] = useState(false);
+  const [formPreviewUrl, setFormPreviewUrl] = useState('');
+
   // Reset state on page refresh
-useEffect(() => {
+  useEffect(() => {
     // Reset frontend state
     setFiles([]);
     setTaxResults(null);
@@ -49,7 +51,7 @@ useEffect(() => {
       }
     };
     resetEverything();
-}, []);
+  }, []);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -167,7 +169,7 @@ useEffect(() => {
     }
   };
 
- const handleResetUploads = async () => {
+  const handleResetUploads = async () => {
     try {
       setUploadStatus('Resetting uploads and data...');
       
@@ -189,7 +191,7 @@ useEffect(() => {
     } catch (error) {
       setUploadStatus(`Error resetting: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-};
+  };
 
   const fetchUploadedFiles = async () => {
     try {
@@ -201,6 +203,43 @@ useEffect(() => {
       }
     } catch (error) {
       console.error('Error fetching uploaded files:', error);
+    }
+  };
+
+  const handlePreviewForm = async () => {
+    try {
+      // Fetch the filled form PDF
+      const response = await fetch('http://localhost:5000/outputs/filled_1040.pdf');
+      if (!response.ok) throw new Error('Failed to fetch form');
+      
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      setFormPreviewUrl(url);
+      setShowFormPreview(true);
+    } catch (error) {
+      setUploadStatus(`Error previewing form: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleDownloadForm = async () => {
+    try {
+      // Fetch the filled form PDF
+      const response = await fetch('http://localhost:5000/outputs/filled_1040.pdf');
+      if (!response.ok) throw new Error('Failed to fetch form');
+      
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      
+      // Create a temporary link and trigger download
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'filled_1040.pdf';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setUploadStatus(`Error downloading form: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -450,6 +489,71 @@ useEffect(() => {
                 <li>1099-NEC Income: ${taxResults.breakdown.nec_income.toFixed(2)}</li>
                 <li>1099-INT Income: ${taxResults.breakdown.interest_income.toFixed(2)}</li>
               </ul>
+            </div>
+            {taxResults?.form_generated && (
+              <div className="mt-4 flex space-x-4">
+                <button
+                  onClick={handlePreviewForm}
+                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                >
+                  Preview Form 1040
+                </button>
+                <button
+                  onClick={handleDownloadForm}
+                  className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+                >
+                  Download Form 1040
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Form Preview Modal */}
+        {showFormPreview && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg max-w-6xl w-full max-h-screen overflow-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold">Form 1040 Preview</h3>
+                <button 
+                  onClick={() => {
+                    setShowFormPreview(false);
+                    URL.revokeObjectURL(formPreviewUrl);
+                  }}
+                  className="text-gray-500 hover:text-gray-700 text-2xl"
+                >
+                  &times;
+                </button>
+              </div>
+              <div className="relative w-full" style={{ height: '90vh' }}>
+                <iframe 
+                  src={`${formPreviewUrl}#view=fitH,100`}
+                  className="w-full h-full border"
+                  title="Form 1040 Preview"
+                  style={{ zoom: '1.5' }}
+                />
+              </div>
+              <div className="mt-4 flex justify-end space-x-4">
+                <button
+                  onClick={() => {
+                    setShowFormPreview(false);
+                    URL.revokeObjectURL(formPreviewUrl);
+                  }}
+                  className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    handleDownloadForm();
+                    setShowFormPreview(false);
+                    URL.revokeObjectURL(formPreviewUrl);
+                  }}
+                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                >
+                  Download
+                </button>
+              </div>
             </div>
           </div>
         )}
