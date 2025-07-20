@@ -32,23 +32,24 @@ export default function TaxReturnUpload() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   
   // Reset state on page refresh
-  useEffect(() => {
+useEffect(() => {
     // Reset frontend state
     setFiles([]);
     setTaxResults(null);
+    setUploadedFiles([]);
     
-    // Clear backend uploads folder
-    const clearUploads = async () => {
+    // Clear backend uploads folder and reset data store
+    const resetEverything = async () => {
       try {
         await fetch('http://localhost:5000/clear-uploads', {
           method: 'POST'
         });
       } catch (error) {
-        console.error('Error clearing uploads:', error);
+        console.error('Error resetting:', error);
       }
     };
-    clearUploads();
-  }, []);
+    resetEverything();
+}, []);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -166,9 +167,11 @@ export default function TaxReturnUpload() {
     }
   };
 
-  const handleResetUploads = async () => {
+ const handleResetUploads = async () => {
     try {
-      setUploadStatus('Resetting uploads...');
+      setUploadStatus('Resetting uploads and data...');
+      
+      // Clear uploads and reset data store
       const response = await fetch('http://localhost:5000/clear-uploads', {
         method: 'POST',
         headers: {
@@ -176,17 +179,17 @@ export default function TaxReturnUpload() {
         },
       });
 
-      if (!response.ok) throw new Error('Failed to reset uploads');
+      if (!response.ok) throw new Error('Failed to reset uploads and data');
       
-      // Clear all upload states
+      // Clear all frontend states
       setFiles([]);
       setTaxResults(null);
       setUploadedFiles([]);
-      setUploadStatus('All uploads have been reset');
+      setUploadStatus('All uploads and data have been reset');
     } catch (error) {
-      setUploadStatus(`Error resetting uploads: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setUploadStatus(`Error resetting: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-  };
+};
 
   const fetchUploadedFiles = async () => {
     try {

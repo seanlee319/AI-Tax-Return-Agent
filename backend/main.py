@@ -53,6 +53,13 @@ def clear_uploads():
         if os.path.exists(UPLOAD_FOLDER):
             shutil.rmtree(UPLOAD_FOLDER)
         os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+        # Reset the data storage
+        extracted_data_store["wages"] = 0.0
+        extracted_data_store["federal_withheld"] = 0.0
+        extracted_data_store["nec_income"] = 0.0
+        extracted_data_store["interest_income"] = 0.0
+
         return jsonify({'success': True, 'message': 'Uploads folder cleared'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -211,6 +218,18 @@ extracted_data_store = {
     "nec_income": 0.0,
     "interest_income": 0.0
 }
+
+#Reset the values for tax calculation
+@app.route('/reset-data-store', methods=['POST'])
+def reset_data_store():
+    try:
+        extracted_data_store["wages"] = 0.0
+        extracted_data_store["federal_withheld"] = 0.0
+        extracted_data_store["nec_income"] = 0.0
+        extracted_data_store["interest_income"] = 0.0
+        return jsonify({'success': True, 'message': 'Data store reset successfully'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 def process_tax_document(text):
     #Process document and extract values
