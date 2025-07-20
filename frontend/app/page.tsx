@@ -29,6 +29,7 @@ export default function TaxReturnUpload() {
   const isProcessingDisabled = !personalInfo.filingStatus || files.length === 0;
   const [taxResults, setTaxResults] = useState<any>(null);
   
+  
   // Reset state on page refresh
   useEffect(() => {
     // Reset frontend state
@@ -51,8 +52,10 @@ export default function TaxReturnUpload() {
 
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
+    if (e.target.files && e.target.files.length > 0) {
       setFiles(Array.from(e.target.files));
+    } else {
+      setFiles([]);
     }
   };
 
@@ -87,6 +90,7 @@ export default function TaxReturnUpload() {
     
     if (files.length === 0) {
       setUploadStatus('Please select at least one file');
+      setFiles([]);
       return;
     }
 
@@ -159,6 +163,28 @@ export default function TaxReturnUpload() {
       setTaxResults(data.results);
     } catch (error) {
       setUploadStatus(`Error calculating tax: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleResetUploads = async () => {
+    try {
+      setUploadStatus('Resetting uploads...');
+      const response = await fetch('http://localhost:5000/clear-uploads', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) throw new Error('Failed to reset uploads');
+      
+      // Clear all upload states
+      setFiles([]);
+      setResults(null);
+      setTaxResults(null);
+      setUploadStatus('');
+    } catch (error) {
+      setUploadStatus(`Error resetting uploads: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -274,6 +300,17 @@ export default function TaxReturnUpload() {
               multiple
               accept=".pdf"
             />
+            {/* Add this to show selected files */}
+            {files.length > 0 && (
+              <div className="mt-2 text-sm text-gray-600">
+                Selected: {files.length} file(s)
+                <ul className="list-disc pl-5 mt-1">
+                  {files.map((file, index) => (
+                    <li key={index}>{file.name}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
           
           <div className="flex flex-col space-y-4">
@@ -329,6 +366,18 @@ export default function TaxReturnUpload() {
           </div>
         )}
         
+        {/* Reset Uploads Button */}
+        {uploadStatus && uploadStatus.includes('successfully') && results && results.length > 0 && (
+          <div className="mt-4">
+            <button
+              onClick={handleResetUploads}
+              className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+            >
+              Reset All Uploads
+            </button>
+          </div>
+        )}
+
         {results && (
           <div className="mt-6">
             <h3 className="text-md font-semibold mb-2">Processed Files:</h3>
@@ -338,7 +387,7 @@ export default function TaxReturnUpload() {
                   <p><strong>Filename:</strong> {result.filename}</p>
                   <p><strong>Status:</strong> {result.message}</p>
                   <details className="mt-2">
-                    <summary className="text-sm text-blue-600 cursor-pointer">View extracted text</summary>
+                    <summary className="text-sm text-blue-600 cursor-pointer">View upload status</summary>
                     <pre className="text-xs bg-white p-2 mt-1 rounded overflow-auto max-h-40">{result.text}</pre>
                   </details>
                 </li>
