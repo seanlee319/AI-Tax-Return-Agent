@@ -270,6 +270,17 @@ def upload_files():
             filename = secure_filename(file.filename)
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             
+            # Check if file already exists (skip if true)
+            if os.path.exists(filepath):
+                saved_files.append({
+                    'original_name': filename,
+                    'saved_name': filename,
+                    'saved_path': filepath,
+                    'status': 'skipped',
+                    'message': 'File already exists'
+                })
+                continue
+
             file.save(filepath)
             
             # Extract text using hybrid approach
@@ -284,12 +295,13 @@ def upload_files():
             # print("="*50)
             # print(extracted_text)
             # print("="*50 + "\n")
-            print(personal_info_store)
+            # print(personal_info_store)
 
             saved_files.append({
                 'original_name': filename,
                 'saved_name': filename,
                 'saved_path': filepath,
+                'status': 'processed',
                 **document_data
             })
     

@@ -9,6 +9,14 @@ type PersonalInfo = {
   otherDependents: number;
 };
 
+type UploadedFile = {
+  name: string;
+  size: number;
+  upload_time: number;
+  status?: string;
+  message?: string;
+};
+
 export default function TaxReturnUpload() {
   const [files, setFiles] = useState<File[]>([]);
   const [uploadStatus, setUploadStatus] = useState('');
@@ -21,7 +29,7 @@ export default function TaxReturnUpload() {
   const [otherDependentsInput, setOtherDependentsInput] = useState('0');
   const isProcessingDisabled = !personalInfo.filingStatus || files.length === 0;
   const [taxResults, setTaxResults] = useState<any>(null);
-  const [uploadedFiles, setUploadedFiles] = useState<Array<{name: string, size: number, upload_time: number}>>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   
   // Reset state on page refresh
   useEffect(() => {
@@ -117,14 +125,25 @@ export default function TaxReturnUpload() {
 
       const data = await filesResponse.json();
       
+      // Check for skipped files
+      const skippedFiles = data.files.filter((file: any) => file.status === 'skipped');
+      const processedFiles = data.files.filter((file: any) => file.status === 'processed');
+      
+      let statusMessage = '';
+      if (processedFiles.length > 0) {
+        statusMessage += `${processedFiles.length} file(s) processed successfully. `;
+      }
+      if (skippedFiles.length > 0) {
+        statusMessage += `${skippedFiles.length} file(s) skipped (already uploaded).`;
+      }
+      
       const errorFiles = data.files.filter((file: any) => file.error);
       if (errorFiles.length > 0) {
         const errorMessages = errorFiles.map((file: any) => file.error).join('\n');
-        setUploadStatus(errorMessages);
-      } else {
-        setUploadStatus('Files uploaded and personal information submitted successfully!');
+        statusMessage += ` Errors: ${errorMessages}`;
       }
       
+      setUploadStatus(statusMessage);
       await fetchUploadedFiles();
       setFiles([]);
       
@@ -366,8 +385,11 @@ export default function TaxReturnUpload() {
             <h3 className="text-md font-semibold mb-2">Uploaded Files:</h3>
             <ul className="space-y-2">
               {uploadedFiles.map((file, index) => (
-                <li key={index} className="p-3 bg-gray-100 rounded">
+                <li key={index} className={`p-3 rounded ${file.status === 'skipped' ? 'bg-yellow-100' : 'bg-gray-100'}`}>
                   <p><strong>Filename:</strong> {file.name}</p>
+                  {file.status === 'skipped' && (
+                    <p className="text-yellow-700 text-sm">Already uploaded - skipped</p>
+                  )}
                   <p className="text-sm text-gray-600">
                     Size: {(file.size / 1024).toFixed(2)} KB • 
                     Uploaded: {new Date(file.upload_time * 1000).toLocaleString()}
