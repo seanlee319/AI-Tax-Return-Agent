@@ -29,6 +29,23 @@ if os.path.exists(UPLOAD_FOLDER):
     shutil.rmtree(UPLOAD_FOLDER)
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+#Show Uploaded Files
+@app.route('/get-uploaded-files', methods=['GET'])
+def get_uploaded_files():
+    try:
+        files = []
+        for filename in os.listdir(UPLOAD_FOLDER):
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            if os.path.isfile(filepath):
+                files.append({
+                    'name': filename,
+                    'size': os.path.getsize(filepath),
+                    'upload_time': os.path.getmtime(filepath)
+                })
+        return jsonify({'success': True, 'files': files})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 #Clear the 'uploads' file on refresh
 @app.route('/clear-uploads', methods=['POST'])
 def clear_uploads():

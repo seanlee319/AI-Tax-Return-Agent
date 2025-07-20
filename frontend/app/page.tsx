@@ -9,12 +9,6 @@ type PersonalInfo = {
   otherDependents: number;
 };
 
-type FileResult = {
-  filename: string;
-  text: string;
-  message: string;
-};
-
 export default function TaxReturnUpload() {
   const [files, setFiles] = useState<File[]>([]);
   const [uploadStatus, setUploadStatus] = useState('');
@@ -25,16 +19,14 @@ export default function TaxReturnUpload() {
   });
   const [dependentChildrenInput, setDependentChildrenInput] = useState('0');
   const [otherDependentsInput, setOtherDependentsInput] = useState('0');
-  const [results, setResults] = useState<FileResult[] | null>(null);
   const isProcessingDisabled = !personalInfo.filingStatus || files.length === 0;
   const [taxResults, setTaxResults] = useState<any>(null);
-  
+  const [uploadedFiles, setUploadedFiles] = useState<Array<{name: string, size: number, upload_time: number}>>([]);
   
   // Reset state on page refresh
   useEffect(() => {
     // Reset frontend state
     setFiles([]);
-    setResults(null);
     setTaxResults(null);
     
     // Clear backend uploads folder
@@ -50,12 +42,9 @@ export default function TaxReturnUpload() {
     clearUploads();
   }, []);
 
-
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       setFiles(Array.from(e.target.files));
-    } else {
-      setFiles([]);
     }
   };
 
@@ -90,12 +79,6 @@ export default function TaxReturnUpload() {
     
     if (files.length === 0) {
       setUploadStatus('Please select at least one file');
-      setFiles([]);
-      return;
-    }
-
-    if (!personalInfo.filingStatus) {
-      setUploadStatus('Please select a filing status');
       return;
     }
 
@@ -139,13 +122,11 @@ export default function TaxReturnUpload() {
         const errorMessages = errorFiles.map((file: any) => file.error).join('\n');
         setUploadStatus(errorMessages);
       } else {
-        setResults(data.files.map((file: any) => ({
-          filename: file.original_name,
-          message: `Saved as ${file.saved_name}`,
-          text: file.extracted_text || 'File processed successfully'
-        })));
         setUploadStatus('Files uploaded and personal information submitted successfully!');
       }
+      
+      await fetchUploadedFiles();
+      setFiles([]);
       
     } catch (error) {
       console.error('Error:', error);
@@ -180,11 +161,24 @@ export default function TaxReturnUpload() {
       
       // Clear all upload states
       setFiles([]);
-      setResults(null);
       setTaxResults(null);
-      setUploadStatus('');
+      setUploadedFiles([]);
+      setUploadStatus('All uploads have been reset');
     } catch (error) {
       setUploadStatus(`Error resetting uploads: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  const fetchUploadedFiles = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/get-uploaded-files');
+      if (!response.ok) throw new Error('Failed to fetch uploaded files');
+      const data = await response.json();
+      if (data.success) {
+        setUploadedFiles(data.files);
+      }
+    } catch (error) {
+      console.error('Error fetching uploaded files:', error);
     }
   };
 
@@ -291,7 +285,7 @@ export default function TaxReturnUpload() {
               id="files"
               name="files"
               onChange={handleFileChange}
-              className="block w-full text-sm text-gray-500
+              className="block w-full text-sm text-transparent
                 file:mr-4 file:py-2 file:px-4
                 file:rounded-md file:border-0
                 file:text-sm file:font-semibold
@@ -299,8 +293,9 @@ export default function TaxReturnUpload() {
                 hover:file:bg-blue-100"
               multiple
               accept=".pdf"
+              key={files.length}
             />
-            {/* Add this to show selected files */}
+
             {files.length > 0 && (
               <div className="mt-2 text-sm text-gray-600">
                 Selected: {files.length} file(s)
@@ -330,9 +325,9 @@ export default function TaxReturnUpload() {
               <button
                 type="button"
                 onClick={handleCalculateTax}
-                disabled={!results}
+                disabled={!uploadedFiles.length}
                 className={`${
-                  !results
+                  !uploadedFiles.length
                     ? 'bg-gray-400 cursor-not-allowed'
                     : 'bg-blue-500 hover:bg-blue-700'
                 } text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline flex-1`}
@@ -365,9 +360,26 @@ export default function TaxReturnUpload() {
             {uploadStatus}
           </div>
         )}
+
+        {uploadedFiles.length > 0 && (
+          <div className="mt-6">
+            <h3 className="text-md font-semibold mb-2">Uploaded Files:</h3>
+            <ul className="space-y-2">
+              {uploadedFiles.map((file, index) => (
+                <li key={index} className="p-3 bg-gray-100 rounded">
+                  <p><strong>Filename:</strong> {file.name}</p>
+                  <p className="text-sm text-gray-600">
+                    Size: {(file.size / 1024).toFixed(2)} KB • 
+                    Uploaded: {new Date(file.upload_time * 1000).toLocaleString()}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         
         {/* Reset Uploads Button */}
-        {uploadStatus && uploadStatus.includes('successfully') && results && results.length > 0 && (
+        {uploadStatus && uploadStatus.includes('successfully') && (
           <div className="mt-4">
             <button
               onClick={handleResetUploads}
@@ -378,23 +390,6 @@ export default function TaxReturnUpload() {
           </div>
         )}
 
-        {results && (
-          <div className="mt-6">
-            <h3 className="text-md font-semibold mb-2">Processed Files:</h3>
-            <ul className="space-y-2">
-              {results.map((result, index) => (
-                <li key={index} className="p-3 bg-gray-100 rounded">
-                  <p><strong>Filename:</strong> {result.filename}</p>
-                  <p><strong>Status:</strong> {result.message}</p>
-                  <details className="mt-2">
-                    <summary className="text-sm text-blue-600 cursor-pointer">View upload status</summary>
-                    <pre className="text-xs bg-white p-2 mt-1 rounded overflow-auto max-h-40">{result.text}</pre>
-                  </details>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
         {taxResults && (
           <div className="mt-6 p-4 bg-green-50 rounded-lg">
             <h3 className="text-lg font-semibold mb-2">Tax Calculation Results</h3>
