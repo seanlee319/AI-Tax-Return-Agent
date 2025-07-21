@@ -187,7 +187,7 @@ export default function TaxReturnUpload() {
       setFiles([]);
       setTaxResults(null);
       setUploadedFiles([]);
-      setUploadStatus('All uploads and data have been reset');
+      setUploadStatus('All uploads, outputs, and data have been reset');
     } catch (error) {
       setUploadStatus(`Error resetting: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }

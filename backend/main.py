@@ -23,12 +23,20 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
+# Set outputs directory
+OUTPUTS_FOLDER = os.path.join(BASE_DIR, 'outputs')
+        
 Path(UPLOAD_FOLDER).mkdir(parents=True, exist_ok=True)
 
 # Clear uploads folder on startup
 if os.path.exists(UPLOAD_FOLDER):
     shutil.rmtree(UPLOAD_FOLDER)
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# Clear outputs folder
+if os.path.exists(OUTPUTS_FOLDER):
+    shutil.rmtree(OUTPUTS_FOLDER)
+os.makedirs(OUTPUTS_FOLDER, exist_ok=True)
 
 #Show Uploaded Files
 @app.route('/get-uploaded-files', methods=['GET'])
@@ -51,9 +59,15 @@ def get_uploaded_files():
 @app.route('/clear-uploads', methods=['POST'])
 def clear_uploads():
     try:
+        # CLear uploads folder
         if os.path.exists(UPLOAD_FOLDER):
             shutil.rmtree(UPLOAD_FOLDER)
         os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+        # Clear outputs folder
+        if os.path.exists(OUTPUTS_FOLDER):
+            shutil.rmtree(OUTPUTS_FOLDER)
+        os.makedirs(OUTPUTS_FOLDER, exist_ok=True)
 
         # Reset the data storage
         extracted_data_store["wages"] = 0.0
@@ -581,13 +595,9 @@ def fill_1040_form(wages: float, nec_income: float, interest_income: float,
                    tax_no_credits: float, tax_owed: float, refund_or_due: float, 
                    filing_status: str, dependent_children: int, other_dependents: int):
     try:
-        # Create outputs directory
-        outputs_dir = os.path.join(BASE_DIR, 'outputs')
-        os.makedirs(outputs_dir, exist_ok=True)
-        
         # File paths
         template_path = os.path.join(BASE_DIR, '1040_template.pdf')
-        output_path = os.path.join(outputs_dir, 'filled_1040.pdf')
+        output_path = os.path.join(OUTPUTS_FOLDER, 'filled_1040.pdf')
         
         # Read template
         reader = PdfReader(template_path)
@@ -662,8 +672,7 @@ def serve_output_file(filename):
         if filename != 'filled_1040.pdf':
             return jsonify({'error': 'File not found'}), 404
             
-        outputs_dir = os.path.join(BASE_DIR, 'outputs')
-        filepath = os.path.join(outputs_dir, filename)
+        filepath = os.path.join(OUTPUTS_FOLDER, filename)
         
         if not os.path.exists(filepath):
             return jsonify({'error': 'File not found'}), 404
