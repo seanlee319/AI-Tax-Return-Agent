@@ -208,3 +208,18 @@ __marimo__/
 
 # Python virtual environment
 backend/venv/
+
+# Environment files
+.env*.local
+.env
+.env.development
+.env.production
+.env.test
+
+# Specific files to ignore
+frontend/.env.local
+backend/.env
+
+# OpenAI API key protection
+**/.env
+**/api_keys.txt
