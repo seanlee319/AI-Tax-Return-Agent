@@ -63,12 +63,20 @@ The application features an AI-powered tax assistant chatbot that provides real-
 
 ## Mobile-Friendly
 The application features a responsive vertical layout optimized for mobile devices, with all form fields and controls arranged in a single-column flow that adapts seamlessly to smaller screens. The clean, uncluttered interface ensures effortless navigation through touch interactions, while form elements are sized appropriately for finger taps. Despite the compact mobile view, users retain full access to the tax assistant through a persistent floating action button positioned in the bottom-right corner.
+
 <p align="center">
   <img width="300" height="675" alt="Image" src="https://github.com/user-attachments/assets/000d2174-fa8a-4b80-8d81-181e4a1b79a7" />
   <img width="300" height="675" alt="Image" src="https://github.com/user-attachments/assets/b367566b-2708-40b7-ac9f-f2cbbb021f6f" />
 </p>
 
 ## Reflections
+The UI design came together smoothly, matching the vision I had during the initial brainstorming phase. I successfully implemented a vertical layout that maintained excellent mobile responsiveness while keeping the interface clean and intuitive. A key feature was progressively revealing buttons and options as users completed each step, preventing the overwhelming feeling of too many choices upfront. This gradual disclosure helped guide users naturally through the tax preparation process.
 
+The most challenging aspect was learning tax calculations from scratch. Having always relied on a CPA to handle my taxes, I'd never needed to understand bracket systems, credit applications, or multi-form income aggregation. Through focused research, I quickly grasped these concepts and implemented accurate calculations for different filing statuses and income types. This deep dive into tax logic proved incredibly valuable, transforming me from someone who simply handed over documents to someone who truly understands the underlying processes.
 
+For security, I implemented robust encryption for both data at rest and in transit by deploying through Vercel. While this provides solid protection, moving to AWS could offer additional advantages. AWS Macie's machine learning capabilities could automatically detect and protect sensitive Personally Identifiable Information (PII) within uploaded documents. AWS's infrastructure would also provide dynamic scaling to handle fluctuating user demand while maintaining the same encryption standards. This potential upgrade path would further strengthen both security and performance as the application grows.
 
+The project proved immensely educational, taking me from UI design through complex tax logic to secure deployment considerations. Beyond delivering a functional prototype, it gave me practical experience in full-stack development while deepening my understanding of both tax systems and application security. The process highlighted how much can be achieved through focused learning and iteration, while also revealing clear areas for future enhancement.
+
+## Future Implementations
+Future enhancements could include a pop-up window that prompts users to manually correct any missing or misread data from their tax documents, improving accuracy when automated extraction encounters challenges. The system could also detect and flag abnormal values like unusually high deductions or negative income with a confirmation dialog to prevent processing errors. To streamline verification, the interface could mirror the visual layout of official IRS forms, allowing side-by-side comparison between extracted data and original documents. Additionally, multilingual support for Spanish and Chinese would make the tool more accessible to non-native English speakers, expanding its user base while maintaining the same rigorous validation for all language versions. These improvements would collectively enhance reliability while maintaining the current system’s efficiency.
