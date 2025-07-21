@@ -1,5 +1,7 @@
 # AI-Tax-Return-Agent
 
+[Visit  AI Tax Return Agent](https://ai-tax-return-agent-319.vercel.app/)
+
 ## Goals
 The goal of this project is to develop a functional tax assistant prototype that automates personal tax filing. The system will process standard tax documents, calculate tax liability, and generate a completed IRS Form 1040. By streamlining tax filing through automation, the solution aims to reduce errors and save users time compared to manual preparation methods. The prototype will demonstrate core capabilities in document ingestion, data extraction, and tax form generation while maintaining accuracy and compliance with IRS regulations.
 
@@ -10,7 +12,9 @@ The goal of this project is to develop a functional tax assistant prototype that
   <img width="350" height="350" alt="Image" src="https://github.com/user-attachments/assets/b77b9ab3-4177-4a9e-b1d2-5fe129eb6b70" />
 </p>
 
+<p>
 When users first visit the website, they're prompted to enter their basic tax information, including filing status, number of dependent children, and other dependents. This essential information establishes the framework for all subsequent tax calculations and determines eligibility for various deductions and credits. The system requires these details upfront to ensure accurate processing later in the workflow.<br \> <br \>
+</p>
 
 <p align="center">
   <img width="350" height="350" alt="Image" src="https://github.com/user-attachments/assets/ab3dce08-0d8e-4e1b-982a-e5e16d72d344" />
