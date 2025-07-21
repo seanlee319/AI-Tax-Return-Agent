@@ -15,6 +15,21 @@ type UploadedFile = {
   upload_time: number;
   status?: string;
   message?: string;
+  error?: string;
+};
+
+type TaxResults = {
+  total_income: number;
+  tax_owed: number;
+  federal_withheld: number;
+  refund_or_due: number;
+  credits_applied: number;
+  form_generated: boolean;
+  breakdown: {
+    wages: number;
+    nec_income: number;
+    interest_income: number;
+  };
 };
 
 export default function TaxReturnUpload() {
@@ -28,7 +43,7 @@ export default function TaxReturnUpload() {
   const [dependentChildrenInput, setDependentChildrenInput] = useState('0');
   const [otherDependentsInput, setOtherDependentsInput] = useState('0');
   const isProcessingDisabled = !personalInfo.filingStatus || files.length === 0;
-  const [taxResults, setTaxResults] = useState<any>(null);
+  const [taxResults, setTaxResults] = useState<TaxResults | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [showFormPreview, setShowFormPreview] = useState(false);
   const [formPreviewUrl, setFormPreviewUrl] = useState('');
@@ -129,8 +144,8 @@ export default function TaxReturnUpload() {
       const data = await filesResponse.json();
       
       // Check for skipped files
-      const skippedFiles = data.files.filter((file: any) => file.status === 'skipped');
-      const processedFiles = data.files.filter((file: any) => file.status === 'processed');
+      const skippedFiles = data.files.filter((file: UploadedFile) => file.status === 'skipped');
+      const processedFiles = data.files.filter((file: UploadedFile) => file.status === 'processed');
       
       let statusMessage = '';
       if (processedFiles.length > 0) {
@@ -140,9 +155,9 @@ export default function TaxReturnUpload() {
         statusMessage += `${skippedFiles.length} file(s) skipped (already uploaded).`;
       }
       
-      const errorFiles = data.files.filter((file: any) => file.error);
+      const errorFiles = data.files.filter((file: UploadedFile) => file.error);
       if (errorFiles.length > 0) {
-        const errorMessages = errorFiles.map((file: any) => file.error).join('\n');
+        const errorMessages = errorFiles.map((file: UploadedFile) => file.error).join('\n');
         statusMessage += ` Errors: ${errorMessages}`;
       }
       

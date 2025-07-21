@@ -14,15 +14,25 @@ Key rules:
 - Child tax credit: $2,000 per child
 Keep responses under 100 words.`;
 
+interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+interface RequestBody {
+  message: string;
+  chatHistory: ChatMessage[];
+}
+
 export async function POST(req: Request) {
-  const { message, chatHistory } = await req.json();
+  const { message, chatHistory }: RequestBody = await req.json();
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo', // Cheapest capable model
+      model: 'gpt-3.5-turbo',
       messages: [
         { role: 'system', content: TAX_PROMPT },
-        ...chatHistory.map((msg: any) => ({
+        ...chatHistory.map((msg: ChatMessage) => ({
           role: msg.role,
           content: msg.content.length > 200 
             ? msg.content.substring(0, 200) + '...' 
@@ -30,8 +40,8 @@ export async function POST(req: Request) {
         })),
         { role: 'user', content: message }
       ],
-      temperature: 0.2, // More deterministic
-      max_tokens: 150, // Limit response length
+      temperature: 0.2,
+      max_tokens: 150,
     });
 
     const reply = response.choices[0]?.message?.content || "Please ask your tax question again.";
@@ -41,7 +51,7 @@ export async function POST(req: Request) {
     console.error('OpenAI error:', error);
     return NextResponse.json(
       { reply: "Our tax service is currently unavailable. Please try again later." },
-      { status: 200 } // Still return 200 to avoid client errors
+      { status: 200 }
     );
   }
 }
