@@ -215,10 +215,19 @@ def extract_INT(text):
         and '-' not in str(x)  # Also exclude hyphenated numbers (like SSN/EIN)
     ]
 
-    # Remove last occurrence of '2024' if it exists
-    if '2024' in filtered_numbers:
-        last_2024_index = len(filtered_numbers) - 1 - filtered_numbers[::-1].index('2024')
-        filtered_numbers.pop(last_2024_index)
+    # List of values to check for
+    values_to_remove = ['20', '2024', '2025']
+
+    # Find the last occurrence of any of these values
+    last_index = None
+    for i in range(len(filtered_numbers)-1, -1, -1):
+        if filtered_numbers[i] in values_to_remove:
+            last_index = i
+            break
+
+    # Remove the last occurrence if found
+    if last_index is not None:
+        filtered_numbers.pop(last_index)
     
     # We need exactly 1 value remaining
     if len(filtered_numbers) != 1:
