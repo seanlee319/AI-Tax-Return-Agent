@@ -1,7 +1,5 @@
 # AI-Tax-Return-Agent
 
-[Visit  AI Tax Return Agent](https://ai-tax-return-agent-319.vercel.app/)
-
 ## Goals
 The goal of this project is to develop a functional tax assistant prototype that automates personal tax filing. The system will process standard tax documents, calculate tax liability, and generate a completed IRS Form 1040. By streamlining tax filing through automation, the solution aims to reduce errors and save users time compared to manual preparation methods. The prototype will demonstrate core capabilities in document ingestion, data extraction, and tax form generation while maintaining accuracy and compliance with IRS regulations.
 
@@ -78,7 +76,7 @@ The UI design came together smoothly, matching the vision I had during the initi
 
 The most challenging aspect was learning tax calculations from scratch. Having always relied on a CPA to handle my taxes, I'd never needed to understand bracket systems, credit applications, or multi-form income aggregation. Through focused research, I quickly grasped these concepts and implemented accurate calculations for different filing statuses and income types. This deep dive into tax logic proved incredibly valuable, transforming me from someone who simply handed over documents to someone who truly understands the underlying processes.
 
-For security, I implemented robust encryption for both data at rest and in transit by deploying through Vercel. While this provides solid protection, moving to AWS could offer additional advantages. AWS Macie's machine learning capabilities could automatically detect and protect sensitive Personally Identifiable Information (PII) within uploaded documents. AWS's infrastructure would also provide dynamic scaling to handle fluctuating user demand while maintaining the same encryption standards. This potential upgrade path would further strengthen both security and performance as the application grows.
+For security, deployment through AWS would offer robust encryption for both data at rest and in transit. AWS Macie's machine learning capabilities could automatically detect and protect sensitive Personally Identifiable Information (PII) within uploaded documents. AWS's infrastructure would also provide dynamic scaling to handle fluctuating user demand while maintaining the same encryption standards. This potential upgrade path would further strengthen both security and performance as the application grows.
 
 The project proved immensely educational, taking me from UI design through complex tax logic to secure deployment considerations. Beyond delivering a functional prototype, it gave me practical experience in full-stack development while deepening my understanding of both tax systems and application security. The process highlighted how much can be achieved through focused learning and iteration, while also revealing clear areas for future enhancement.
 
