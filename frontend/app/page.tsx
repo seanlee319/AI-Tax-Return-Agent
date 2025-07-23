@@ -47,6 +47,7 @@ export default function TaxReturnUpload() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [showFormPreview, setShowFormPreview] = useState(false);
   const [formPreviewUrl, setFormPreviewUrl] = useState('');
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
 
   // Reset state on page refresh
   useEffect(() => {
@@ -58,7 +59,7 @@ export default function TaxReturnUpload() {
     // Clear backend uploads folder and reset data store
     const resetEverything = async () => {
       try {
-        await fetch('http://localhost:5000/clear-uploads', {
+        await fetch(`${API_BASE_URL}/clear-uploads`, {
           method: 'POST'
         });
       } catch (error) {
@@ -112,7 +113,7 @@ export default function TaxReturnUpload() {
       setUploadStatus('Uploading files and submitting personal information...');
       
       // First submit personal info
-      const personalInfoResponse = await fetch('http://localhost:5000/submit-personal-info', {
+      const personalInfoResponse = await fetch(`${API_BASE_URL}/submit-personal-info`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -132,7 +133,7 @@ export default function TaxReturnUpload() {
       const formData = new FormData();
       files.forEach(file => formData.append('files', file));
 
-      const filesResponse = await fetch('http://localhost:5000/upload', {
+      const filesResponse = await fetch(`${API_BASE_URL}/upload`, {
         method: 'POST',
         body: formData,
       });
@@ -173,7 +174,7 @@ export default function TaxReturnUpload() {
 
   const handleCalculateTax = async () => {
     try {
-      const response = await fetch('http://localhost:5000/calculate-tax');
+      const response = await fetch(`${API_BASE_URL}/calculate-tax`);
       if (!response.ok) {
         throw new Error('Failed to calculate tax');
       }
@@ -189,7 +190,7 @@ export default function TaxReturnUpload() {
       setUploadStatus('Resetting uploads and data...');
       
       // Clear uploads and reset data store
-      const response = await fetch('http://localhost:5000/clear-uploads', {
+      const response = await fetch(`${API_BASE_URL}/clear-uploads`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -210,7 +211,7 @@ export default function TaxReturnUpload() {
 
   const fetchUploadedFiles = async () => {
     try {
-      const response = await fetch('http://localhost:5000/get-uploaded-files');
+      const response = await fetch(`${API_BASE_URL}/get-uploaded-files`);
       if (!response.ok) throw new Error('Failed to fetch uploaded files');
       const data = await response.json();
       if (data.success) {
@@ -224,7 +225,7 @@ export default function TaxReturnUpload() {
   const handlePreviewForm = async () => {
     try {
       // Fetch the filled form PDF
-      const response = await fetch('http://localhost:5000/outputs/filled_1040.pdf');
+      const response = await fetch(`${API_BASE_URL}/outputs/filled_1040.pdf`);
       if (!response.ok) throw new Error('Failed to fetch form');
       
       const blob = await response.blob();
@@ -239,7 +240,7 @@ export default function TaxReturnUpload() {
   const handleDownloadForm = async () => {
     try {
       // Fetch the filled form PDF
-      const response = await fetch('http://localhost:5000/outputs/filled_1040.pdf');
+      const response = await fetch(`${API_BASE_URL}/outputs/filled_1040.pdf`);
       if (!response.ok) throw new Error('Failed to fetch form');
       
       const blob = await response.blob();
