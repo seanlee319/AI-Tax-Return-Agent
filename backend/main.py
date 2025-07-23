@@ -693,7 +693,14 @@ def serve_output_file(filename):
 # Root Route    
 @app.route('/')
 def home():
-    return jsonify({"status": "Running", "message": "AI Tax Return Agent Backend"})
+    return jsonify({
+        "status": "running",
+        "service": "AI Tax Return Agent Backend",
+        "endpoints": {
+            "upload": "/upload",
+            "calculate": "/calculate-tax"
+        }
+    })
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
