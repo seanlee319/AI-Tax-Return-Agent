@@ -690,5 +690,10 @@ def serve_output_file(filename):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# Root Route    
+@app.route('/')
+def home():
+    return jsonify({"status": "Running", "message": "AI Tax Return Agent Backend"})
+
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
